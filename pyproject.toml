@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Process-bigraph wrapper for PennyLane adversarial attacks on QML classifiers"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Alexander Patrie", email = "alexander@patrie.dev"},
 ]
@@ -34,17 +34,26 @@ dependencies = [
     "matplotlib",
     "plotly",
     "vivarium-dashboard",
+    "polars",
 ]
+
+[project.scripts]
+adversarial = "app.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/anomalyco/pbg-pennylane-adversarial"
 Issues = "https://github.com/anomalyco/pbg-pennylane-adversarial/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pbg_pennylane_adversarial"]
+packages = ["pbg_pennylane_adversarial", "app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.uv.sources]
 vivarium-dashboard = { path = "/Users/alexanderpatrie/vivarium-app/vivarium-dashboard", editable = true }
+
+[dependency-groups]
+cli = [
+    "typer>=0.26.8",
+]

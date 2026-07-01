@@ -10,7 +10,8 @@ output/
 *.nc
 .idea/
 .pbg/
-
+uv.lock
+datasets/
 
 # Added by pbg-superpowers in-place scaffolder
 .pbg/*
