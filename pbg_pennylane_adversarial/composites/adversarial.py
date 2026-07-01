@@ -3,26 +3,64 @@
 Each generator returns a Composite document suitable for
 ``Composite({"state": doc}, core=core)`` that runs the full
 train → attack → adversarial-retrain → evaluate pipeline.
+
+Data is included in the composite stores so the process reads it through
+its input ports. By default the PlusMinus dataset is used; callers can
+pass custom ``train_images``, ``train_labels``, ``test_images``,
+``test_labels`` keyword arguments to override.
 """
 
+import numpy as np
 from pbg_superpowers.composite_generator import composite_generator
 
 
-def _build_adversarial_document(config=None):
+def _load_plusminus(n_train=200, n_test=50):
+    """Load PlusMinus dataset and return data lists suitable for stores."""
+    import pennylane as qml
+    from pennylane import numpy as pnp
+    [pm] = qml.data.load("other", name="plus-minus")
+    return (
+        np.array(pm.img_train[:n_train].reshape(n_train, -1)).tolist(),
+        pm.labels_train[:n_train].tolist(),
+        np.array(pm.img_test[:n_test].reshape(n_test, -1)).tolist(),
+        pm.labels_test[:n_test].tolist(),
+    )
+
+
+def _build_adversarial_document(
+    config=None,
+    train_images=None, train_labels=None,
+    test_images=None, test_labels=None,
+):
     """Build a Composite document for the PennyLane adversarial pipeline.
 
     Parameters
     ----------
     config : dict or None
         Overrides for PennyLaneAdversarialProcess config.
+    train_images : list or None
+        Training feature matrix as nested list.
+    train_labels : list or None
+        Training labels.
+    test_images : list or None
+        Test feature matrix as nested list.
+    test_labels : list or None
+        Test labels.
 
     Returns
     -------
     dict
-        Composite state document.
+        Composite state document with data wired through stores.
     """
     if config is None:
         config = {}
+
+    if train_images is None:
+        n_train = config.get("n_train", 200)
+        n_test = config.get("n_test", 50)
+        train_images, train_labels, test_images, test_labels = _load_plusminus(
+            n_train, n_test
+        )
 
     return {
         "adversarial": {
@@ -30,7 +68,12 @@ def _build_adversarial_document(config=None):
             "address": "local:PennyLaneAdversarialProcess",
             "config": config,
             "interval": 1.0,
-            "inputs": {},
+            "inputs": {
+                "train_images": ["stores", "train_images"],
+                "train_labels": ["stores", "train_labels"],
+                "test_images": ["stores", "test_images"],
+                "test_labels": ["stores", "test_labels"],
+            },
             "outputs": {
                 "phase": ["stores", "phase"],
                 "epoch": ["stores", "epoch"],
@@ -44,6 +87,10 @@ def _build_adversarial_document(config=None):
             },
         },
         "stores": {
+            "train_images": train_images,
+            "train_labels": train_labels,
+            "test_images": test_images,
+            "test_labels": test_labels,
             "phase": "init",
             "epoch": 0,
             "loss": 0.0,
