@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pbg-pennylane-adversarial"
+version = "0.1.0"
+description = "Process-bigraph wrapper for PennyLane adversarial attacks on QML classifiers"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Alexander Patrie", email = "alexander@patrie.dev"},
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Quantum Computing",
+]
+dependencies = [
+    "bigraph-schema>=0.0.60",
+    "process-bigraph>=1.5.0",
+    "pennylane>=0.35",
+    "torch>=2.0",
+    "aiohttp",
+    "fsspec",
+    "h5py",
+    "bigraph-viz>=2.0.3",
+    "pyyaml>=6.0",
+    "jsonschema[format-nongpl]>=4.21",
+    "jinja2>=3.1",
+    "pypdf>=4.0",
+    "matplotlib",
+    "plotly",
+    "vivarium-dashboard",
+]
+
+[project.urls]
+Homepage = "https://github.com/anomalyco/pbg-pennylane-adversarial"
+Issues = "https://github.com/anomalyco/pbg-pennylane-adversarial/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pbg_pennylane_adversarial"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+vivarium-dashboard = { path = "/Users/alexanderpatrie/vivarium-app/vivarium-dashboard", editable = true }
