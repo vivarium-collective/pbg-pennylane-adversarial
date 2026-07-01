@@ -60,6 +60,14 @@ CONFIGS = [
         "accent": "#636efa",
         "n_snapshots": 15,
         "total_time": 15.0,
+        "dataset": {
+            "name": "PlusMinus",
+            "source": "PennyLane built-in (other/plus-minus)",
+            "n_train": 50,
+            "n_test": 20,
+            "input_dim": 784,
+            "output_dim": 2,
+        },
     },
     {
         "id": "strong_attack",
@@ -85,6 +93,14 @@ CONFIGS = [
         "accent": "#ef553b",
         "n_snapshots": 20,
         "total_time": 20.0,
+        "dataset": {
+            "name": "PlusMinus",
+            "source": "PennyLane built-in (other/plus-minus)",
+            "n_train": 50,
+            "n_test": 20,
+            "input_dim": 784,
+            "output_dim": 2,
+        },
     },
     {
         "id": "lightweight",
@@ -109,6 +125,14 @@ CONFIGS = [
         "accent": "#00cc96",
         "n_snapshots": 10,
         "total_time": 10.0,
+        "dataset": {
+            "name": "PlusMinus",
+            "source": "PennyLane built-in (other/plus-minus)",
+            "n_train": 30,
+            "n_test": 10,
+            "input_dim": 784,
+            "output_dim": 2,
+        },
     },
 ]
 
@@ -162,6 +186,25 @@ def build_metrics_card(title, value, subtitle, color):
     </div>"""
 
 
+def build_dataset_badge(ds):
+    """Return HTML for a dataset info badge."""
+    return f"""
+    <div style="background:#eef2ff;border-radius:8px;padding:12px;
+                border:1px solid #c7d2fe;margin-bottom:16px;">
+      <div style="font-size:0.75rem;color:#475569;text-transform:uppercase;
+                  letter-spacing:0.05em;margin-bottom:4px;">Dataset</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;">
+        <span style="font-weight:700;color:#4338ca;font-size:1rem;">{ds['name']}</span>
+        <span style="font-size:0.8rem;color:#64748b;">
+          {ds.get('source', 'custom')} &mdash;
+          {ds['n_train']} train / {ds['n_test']} test samples,
+          {ds['input_dim']}-d features,
+          {ds['output_dim']} classes
+        </span>
+      </div>
+    </div>"""
+
+
 def build_section(records, cfg):
     """Build an HTML section for one config."""
     accent = cfg["accent"]
@@ -192,6 +235,15 @@ def build_section(records, cfg):
         build_metrics_card("Circuit Evals", f"{n_q:,}",
                            "Total QPU calls", "#f59e0b"),
     ])
+
+    dataset_html = build_dataset_badge(cfg.get("dataset", {
+        "name": "Custom",
+        "source": "Supplied through input ports",
+        "n_train": "?",
+        "n_test": "?",
+        "input_dim": "auto",
+        "output_dim": "auto",
+    }))
 
     # Accuracy chart (Plotly)
     steps = [r["step"] for r in records]
@@ -268,6 +320,7 @@ def build_section(records, cfg):
       <p style="color:#475569;font-size:0.9rem;line-height:1.5;margin-bottom:16px;">
         {cfg['description']}
       </p>
+      {dataset_html}
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
         {cards_html}
       </div>
@@ -367,7 +420,7 @@ def generate_report():
       </p>
       <ul style="color:#475569;font-size:0.9rem;line-height:1.8;">
         <li><strong>Training</strong> — supervised cross-entropy optimization on the
-          PlusMinus dataset (Adam optimizer).</li>
+          supplied dataset (Adam optimizer).</li>
         <li><strong>Benign evaluation</strong> — accuracy on clean test samples.</li>
         <li><strong>PGD Attack</strong> — projected gradient descent perturbation
           (epsilon-bound L_inf, sign-gradient ascent).</li>
@@ -377,10 +430,61 @@ def generate_report():
         <li><strong>Robust evaluation</strong> — accuracy on perturbed data after
           retraining.</li>
       </ul>
-      <p style="color:#475569;font-size:0.9rem;line-height:1.5;margin-top:12px;">
-        Inputs arrive through PennyLane Datasets; outputs emit accuracy, loss, and
-        query-count metrics through process-bigraph ports. Each <code>update()</code>
-        advances one epoch or evaluation phase.
+
+      <h3 style="font-size:1rem;font-weight:600;color:#1e293b;margin-top:20px;
+                 margin-bottom:8px;">Data Interface</h3>
+      <p style="color:#475569;font-size:0.9rem;line-height:1.5;">
+        Data arrives through four input ports:
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;
+                    margin:8px 0;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="padding:6px 10px;text-align:left;">Port</th>
+            <th style="padding:6px 10px;text-align:left;">Type</th>
+            <th style="padding:6px 10px;text-align:left;">Shape</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:6px 10px;"><code>train_images</code></td>
+            <td style="padding:6px 10px;"><code>array[float64]</code></td>
+            <td style="padding:6px 10px;">(n_train, input_dim)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:6px 10px;"><code>train_labels</code></td>
+            <td style="padding:6px 10px;"><code>array[int64]</code></td>
+            <td style="padding:6px 10px;">(n_train,)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:6px 10px;"><code>test_images</code></td>
+            <td style="padding:6px 10px;"><code>array[float64]</code></td>
+            <td style="padding:6px 10px;">(n_test, input_dim)</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:6px 10px;"><code>test_labels</code></td>
+            <td style="padding:6px 10px;"><code>array[int64]</code></td>
+            <td style="padding:6px 10px;">(n_test,)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="color:#475569;font-size:0.9rem;line-height:1.5;">
+        When no data is wired (<code>train_images</code> is empty or missing),
+        the process automatically falls back to PennyLane's built-in
+        <strong>PlusMinus</strong> dataset for backward compatibility.
+      </p>
+      <p style="color:#475569;font-size:0.9rem;line-height:1.5;margin-top:8px;">
+        <code>input_dim</code> and <code>output_dim</code> are auto-detected from
+        the data shape (number of columns, number of unique labels respectively)
+        but can be overridden via config. The circuit architecture adapts
+        dynamically: <code>num_reup</code> (data re-uploading repeats) is computed
+        to satisfy the <code>StronglyEntanglingLayers</code> weight tensor
+        dimension constraint.
+      </p>
+      <p style="color:#475569;font-size:0.9rem;line-height:1.5;margin-top:8px;">
+        Each <code>update()</code> advances one epoch or evaluation phase.
+        Data is cached internally on first call, so forward/backward passes
+        reuse tensors without re-reading stores each step.
       </p>
     </section>
     """
