@@ -1,264 +1,141 @@
-# Next steps for pennylane-adversarial
+# NEXT STEPS — Implementation Plan
 
-This workspace IS the model. You build it incrementally through phases.
-Most work happens in the **dashboard** — a side-rail of tabs, each with
-the buttons you need. Skills (Claude Code) are the alternative for
-code-writing tasks. The set of tabs evolves as the dashboard grows;
-see what's live at the URL printed by `scripts/serve.sh`.
+All gaps sorted by Impact × Effort × Severity magnitude (descending).
 
+---
+
+## 1. WCM Extraction Tool (`I=3, E=3, S=2 → 18`)
+
+**Gap**: No way to go from v2ecoli simulation outputs → formatted dataset without manual CSV curation.
+
+**Source**: v2ecoli at `~/vivarium-app/v2ecoli`. Outputs are Parquet hive dirs:
 ```
-bash scripts/serve.sh   # opens browser at http://localhost:<port>
+out/workflow/parquet/<experiment_id>/history/
+  experiment_id=<id>/variant=<v>/lineage_seed=<s>/generation=<g>/agent_id=<id>/N.pq
 ```
 
-## 0 — One-time setup
+**Pre-req — parca cache**: runs need `out/cache/sim_data_cache.dill`. If missing or stale, run:
+```
+cd ~/vivarium-app/v2ecoli
+uv run v2ecoli-parca --mode fast --cache-dir out/cache  # ~30 min
+```
+The cache at `out/cache/` exists and looks valid (has `sim_data_cache.dill`), but verify before running a full workflow.
 
-- [ ] Create the venv: `uv venv .venv`
-- [ ] Activate it: `source .venv/bin/activate`
-- [ ] Install workspace deps: `uv pip install -e ".[dev]"`
-- [ ] Lint: `python3 scripts/lint-workspace.py` should print `workspace lint: OK`
-- [ ] Commit + (eventually) push: `git init && git add -A && git commit -m "feat: workspace bootstrap"`
+**Plan**:
+1. Add `adversarial datasets from-wcm` subcommand to `app/cli.py`:
+   - Walks the Parquet hive directory tree
+   - Scans all agents/generations/time steps
+   - Flattens into rows × columns (one row per agent per time step)
+   - Accepts `--feature-cols`, `--target-col`, `--train-ratio`, `--seed`, `--normalize`, `--output-format`, `--output`
+   - Calls existing `transform()` then `write()` for downstream pipeline compatibility
+2. Add a helper function in `pbg_pennylane_adversarial/dataset_transform/wcm_loader.py`:
+   - `load_wcm_history(history_dir)` → `pl.DataFrame` of all time steps (reuses pattern from `v2ecoli.library.parquet_viz.load_run_history`)
+   - `auto_detect_targets(df)` → suggests cell-cycle phase candidates from `listeners__replication_data__*` columns
+3. Verify: `uv run adversarial datasets from-wcm --help` → sensible opts
 
-> **If `uv pip install` fails with "vivarium-dashboard was not found in
-> the package registry":** vivarium-dashboard isn't on PyPI yet. The
-> template's init script ALWAYS pins it to its public git source in
-> `pyproject.toml` (never a committed local path — that would break CI,
-> Docker, and collaborators who lack the sibling checkout):
->
-> ```toml
-> [tool.uv.sources]
-> vivarium-dashboard = { git = "https://github.com/vivarium-collective/vivarium-dashboard.git", branch = "main" }
-> ```
->
-> If that block is missing, add it and re-run `uv pip install -e ".[dev]"`.
-> For local dev against a sibling checkout, override with an editable install
-> into your venv (no committed local path required):
->
-> ```bash
-> uv pip install -e ../vivarium-dashboard
-> ```
+---
 
-## The dashboard tabs
+## 2. Classical Baseline Comparison in Report (`I=3, E=1, S=2 → 6`)
 
-> The dashboard's tab set evolves as the platform grows. The list below
-> reflects the rail at the time this template was rendered; the source
-> of truth is the live UI you opened at `http://localhost:<port>/`.
+**Gap**: Report shows quantum metrics but no reference — can't tell if the QML adds value.
 
-| Rail label | Hash route | What it's for |
-|---|---|---|
-| **Workspace inputs** | `#workspace-inputs` | External resources — datasets, references (PDFs auto-extract metadata), expert docs. Simulation modules live in the Registry tab. |
-| **Registry** | `#registry` | Browse the curated catalog (`scripts/_catalog/modules.json`), install pbg-* modules, and view live `build_core()` introspection of discovered Processes/Steps/Types. |
-| **Composites** | `#simulation-setup` | Browse and explore composites available in the workspace. Each composite packages a runnable simulation state with parameters you can configure. |
-| **Investigations** | `#investigations` | Declarative research recipes — pick a composite, declare simulations (single / sweep / seeds), name observables, choose visualizations. Run, save, compare. |
-| **Visualizations** | `#visualizations` | Charts rendered from observable trajectories. Configure a registered Visualization class with specific settings, or describe a chart in natural language and let `/pbg-viz` generate it. |
-| **GitHub Branches** | `#branches` | All `stage/*` branches in the workspace with one-click merge / PR / diff actions. Branches accumulate as the dashboard creates them on actions (Add observable, Install module, …); use this tab to land them on main. |
+**Plan**:
+1. Add `--baselines` flag to `pipeline run` (optional, `default=False`):
+   - When set, train `LogisticRegression(max_iter=1000)` and `RandomForestClassifier(n_estimators=100)` on same train/test split
+   - Also run PGD perturbation on classical models (project perturbed features back to valid range after each step — note PGD is L_infinity, works on any differentiable model; for sklearn we approximate by measuring accuracy drop on perturbed test set after one-shot perturbation)
+2. Extend `_save_outputs` / `records` to include `baselines: {logistic_regression: {benign_accuracy, adversarial_accuracy}, random_forest: {benign_accuracy, adversarial_accuracy}}`
+3. Extend `generate_run_report()` in `report.py` to render a **Baseline Comparison** section:
+   - Grouped bar chart: benign accuracy × adversarial accuracy for QML + each baseline
+   - Metrics card per baseline
+   - If quantum model is within 5 pp of best classical, call it "competitive"; otherwise note the gap
+4. Add sklearn to `pyproject.toml` deps (if not already; uv picks it up transitively from v2ecoli)
 
-(Note: the **Composites** tab still routes under `#simulation-setup` for
-backwards compatibility — the rail label was renamed but the URL fragment
-wasn't. Use the table above when bookmarking focused panels.)
+**Status: done.** `pbg_pennylane_adversarial/baselines.py` (`run_baselines`), `--baselines` flag in
+`pipeline run`, Baseline Comparison section in `report.py`. Also added a **transfer-attack** number
+per baseline (own-attack robustness vs. accuracy under the QML PGD attack's exact perturbation replayed
+against the baseline) — the QML process now exposes `perturbation_delta` as an output port
+(`processes.py`) so the CLI can pass it to `run_baselines(..., transfer_delta=...)`. This was a deliberate
+scope addition beyond the original plan text, agreed with the user in-session.
 
-## 1 — Workspace inputs (any time)
+---
 
-Inputs aren't a sequential stage — load them whenever they're useful.
+## 3. High-Dimensional Feature Scaling (`I=1, E=2, S=1 → 2`)
 
-- **Datasets** — experimental data the model validates against. Drag-drop a file.
-- **References** — paper PDFs. Drop the file; pypdf extracts metadata; bibtex auto-generates.
-- **Expert docs** — lab notes, curated reviews, working drafts. Drag-drop a PDF.
+**Gap**: `num_reup` dilutes per-feature expressivity when `input_dim` is large relative to `num_qubits * num_layers * 3`.
 
-Simulation modules (Python packages that contribute Processes/Steps) are
-installed from the **Registry** tab, not here.
+**Plan** (deferred — only act if >50 features hurt accuracy):
+1. Check: does adding more features monotonically decrease accuracy on a fixed number of qubits/layers? If yes, consider:
+   - Auto-raise `num_layers` based on `input_dim` (e.g., `num_layers = max(config.num_layers, ceil(input_dim / num_qubits))`)
+   - Or add a PCA step before the circuit: `input_dim → min(input_dim, num_qubits * num_layers)` via `sklearn.decomposition.PCA`
+2. Log a warning in `_build_model` if `num_reup > 3` to alert the user.
 
-Each `+ Add` lands on a `stage/*` branch you can merge from the GitHub Branches tab.
+**Status: done, scope-adjusted from the plan based on empirical testing.**
+- **Trigger confirmed**: on a fixed small circuit (`num_qubits=4, num_layers=4` → `weights_elements=48`),
+  benign accuracy collapses to ~chance once `input_dim` approaches/exceeds `weights_elements`
+  (`num_reup` hitting 1), regardless of which feature column carries the signal — not just a truncation
+  artifact of `forward()`'s `repeated[:weights_elements]`.
+- **Auto-raising `num_layers` (the plan's first option) was tried and empirically rejected**: even after
+  raising `num_layers` to restore `num_reup >= 2` and training for up to 50 epochs, accuracy stayed at
+  chance. A deeper `StronglyEntanglingLayers` circuit is measurably harder to train (consistent with
+  barren-plateau-type effects), so growing the circuit is not a safe default fix. Instead, the implemented
+  option is a PCA step (`sklearn.decomposition.PCA`, fit on training data only), which keeps
+  `num_qubits`/`num_layers` fixed and reduces `input_dim` to `weights_elements // MIN_NUM_REUP`
+  (`MIN_NUM_REUP = 2`, a class constant on `PennyLaneAdversarialProcess`) whenever the raw `input_dim`
+  would exceed it. `n_components` is additionally clamped to `n_train_samples` to satisfy sklearn's PCA
+  constraint on small datasets. A `UserWarning` is emitted whenever this triggers.
+- **Honest caveat**: the PCA fix measurably helps (mean accuracy improves vs. doing nothing) but does
+  *not* reliably restore accuracy to the same level as native low-dimensional data in all cases — this
+  remains a genuinely hard optimization problem (small-sample noise, limited training budget, circuit
+  expressivity) beyond this chunk's minimal-effort scope. Treat this as harm reduction, not a full fix.
+- The plan's second bullet ("warn if `num_reup > 3`") was inverted based on the data: the actual risk
+  zone is `num_reup` being *too low* (≤1), not too high, so the warning fires on the low-redundancy
+  condition instead (see the PCA-trigger warning above, which subsumes it).
+- Tests: `tests/test_processes.py::test_high_input_dim_triggers_pca_reduction`,
+  `::test_low_input_dim_no_pca_warning`. Full non-timeout suite: 61 passed (was 59; two new tests added).
+  Full suite (incl. `@pytest.mark.timeout` real-training tests): 65 passed, 4 failed — the 4 failures
+  (`test_composite_assembly_with_data`, `test_composite_assembly_plusminus`,
+  `test_adversarial_baseline_generator`, `test_adversarial_lightweight_generator`) are a pre-existing
+  link-registration ordering issue, confirmed present on the unmodified `main` baseline before this
+  chunk's changes — unrelated to this work, not fixed (out of scope).
 
-## 2 — Registry
+---
 
-Two coordinated views on one tab:
-
-- **Available modules** — the curated `pbg-*` catalog in `scripts/_catalog/modules.json`, regenerated from the `vivarium-collective` GitHub org by `scripts/_catalog/sync-catalog.py`. Click **Install** to `git submodule add` into `external/<name>/`, `pip install -e` it into the workspace venv, and append it to `pyproject.toml` deps + `workspace.yaml.imports`.
-- **Discovered processes / types** — live introspection of `build_core()`. Every Process/Step/Emitter/Visualization/Type that `allocate_core()` finds via [bigraph-schema's discovery convention][discovery]. Click **Refresh registry** after an Install to see new entries.
-
-Empty Discovered view usually means the venv isn't built (`uv pip install -e ".[dev]"`) or the import isn't installed.
-
-## 3 — Composites
-
-Composite documents — process-bigraph state trees — live here. Pick one, inspect its wiring (process tree, store paths, emitters), and run it from the **Composite Explorer** sub-page to confirm it produces sensible output before wiring it into an investigation. Composites you write directly into `pbg_pennylane_adversarial/composites/` show up automatically.
-
-## 4 — Studies and Investigations
-
-A **study** (`studies/<slug>/study.yaml`) is one research question, with a
-`phase:` of `Design | Build | Simulate | Evaluate | Decide`. Use `/pbg-study
-<slug>` from the [pbg-superpowers] plugin to scaffold one. Decide-phase
-studies can record `followup_proposals[]`; seed a child study from any
-proposal with `/pbg-study seed-from-followup <parent>/<proposal_id>` (the
-child gets a `seeded_from:` provenance stamp).
-
-### The study.yaml narrative spine (schema v4)
-
-A complete study has 14 sections, grouped into three layers. Fill them in
-roughly top-to-bottom — sections marked **★** are the ones most worth
-authoring first because the dashboard renders them at the top of the report
-and a reviewer can land on a study without reading the YAML.
-
-**Executive layer** (renders at the top of the study page)
-1. `runtime:` — per-study execution overrides (subprocess_timeout_s, default_emitter, max_generations, post_run_scripts). Skip if you're using workspace defaults.
-2. **★ `report:`** — `{title, verdict, confidence, evidence_quality, objective, conclusion, main_insight, caveat, key_metrics: [...]}`. The exec summary a reviewer reads first.
-3. **★ `study_card:`** — `{goal, mechanism, why_before_next, expected_result, main_expert_question}`. One paragraph each. The dashboard one-pager.
-
-**Framing layer** (what + why)
-4. **★ `question:`** + `assumptions:` — the hypothesis, plus the literature facts the study assumes (each with `cites` + `verified_in_v2ecoli` flag).
-5. **★ `conditions:`** — `{baseline, variants, model_settings: [...], expert_inputs: [...]}`. `model_settings` is the tunable-parameter catalog (each with default/current/range/cites). v3 specs put baseline/variants at top level; v4 groups them under `conditions:`.
-6. `enforced_params:` — parameter values the study REQUIRES be applied. The framework verifies after each run and flags drift.
-
-**Validation layer** (what would falsify it)
-7. **★ `tests:`** (a.k.a. `behavior_tests:` for v3 compat) — `[{name, classification, measure: {path, kind, window}, pass_if: {op, low/high}, status, cites}]`. Each test ties a measurable outcome to a literature-grounded threshold.
-8. **★ `readouts:`** — `[{name, store_path, units, status, blocked_by_requirements}]`. The observables the tests read from. `store_path` is the exact emission path in the composite output.
-9. `biological_summary:` — multi-paragraph plain-English mechanism prose. The textbook write-up.
-10. `literature_anchors:` — `[{expectation, model_observable, source, status_in_workspace}]`. Pairs each literature claim with the model observable that would falsify or confirm it.
-
-**Implementation + decisions layer**
-11. `model_change:` — declarative inventory: `{base_model, new_processes, new_state_variables, new_parameters, new_listeners, modified_processes}`. What code changes.
-12. `implementation_requirements:` — `[{id, kind, title, effort, status, steps, unblocks}]`. The TODO list.
-13. `design_pivot_required:` — named open decision points with alternatives + `requested_response`. Surfaces the choices an expert can weigh in on.
-14. **★ `conclusion_verdicts:`** — three-track verdict: `{regression_compatibility, biological_validation, explanatory_gain}` each `{result, basis}`. Lets a study be "PASS on regression but MIXED on biology" instead of forcing one boolean.
-
-### The investigation.yaml narrative spine (schema v2)
-
-An **investigation** (`investigations/<slug>/investigation.yaml`) groups
-related studies and orders them as a DAG. A complete investigation pairs the
-study list with a narrative spine that mirrors the study spine at a level up.
-Use `/pbg-investigation <slug>` to scaffold.
-
-- `executive:` — `{what_is_this, verdict, verdict_status, decisions_needed: [...]}`. The headline panel.
-- `scientific_argument:` — `{main_claim, evidence_for, evidence_against, key_figures, caveats}`. The chain of reasoning.
-- `lead:` — 3-4 sentence intro (first thing a reader sees).
-- `biological_story:` — multi-paragraph mechanism prose.
-- `at_a_glance:` — `[{study, role: '<one-line role>'}]`. What each member study contributes.
-- `how_to_read:` — evaluator tips.
-- `glossary:` — `[{term, definition}]` for investigation-local terms.
-- `guidelines:` — literature anchors, parameter catalog, calibration targets every member study respects.
-- `studies:` — ordered slug list. The DAG topology is derived from each study's `pipeline_gate.prerequisites`.
-- `acceptance_criteria:` — `[{study, behavior}]` referencing `behavior_tests[].name` on member studies.
-
-You do NOT have to fill every section before running. Start with `report` +
-`study_card` + `question` + `conditions` + `tests` + `readouts` (the ★
-sections). Add the rest as the study matures.
-
-The legacy per-investigation "run a composite + observables + visualizations"
-flow still lives in the dashboard's Investigations tab — pick a composite,
-declare simulations (single / sweep / seeds), name observables, run, save,
-compare.
-
-## 5 — Visualizations
-
-Charts rendered from observable trajectories. Two creation paths:
-
-- **Configure a registered class** — pick from the Visualization classes discovered in the Registry (subclasses of `pbg_superpowers.visualization.Visualization` in any installed pbg-* package), give it settings.
-- **Generate from natural language** — describe what you want; the dashboard writes a request file and prompts you to run `/pbg-viz <name>`, which scaffolds a new Visualization function into `pbg_pennylane_adversarial/visualizations/` and commits it on a stage branch.
-
-## 6 — GitHub Branches
-
-Every dashboard action (install a module, add an observable, generate a viz, …) creates a `stage/*` branch and commits the change there. This tab is the landing UI:
-
-- **Copy gh** — `gh pr create` command for that branch.
-- **Copy git merge** — local merge command, no PR.
-- **Show diff** — preview without leaving the tab.
-
-When all your in-flight stage branches are merged, the rail badge clears.
-
-### Container image (GHCR)
-
-Each push triggers `.github/workflows/build-and-push.yml`, which builds your workspace `Dockerfile` and publishes `ghcr.io/<owner>/<repo>:<tag>` (tags: `<branch>`, `pr-N`, `sha-<short>`, `latest` on default). Images are multi-arch (`linux/amd64` + `linux/arm64`), so Apple Silicon contributors get native pulls.
-
-**Anonymous `docker pull` — visibility depends on who owns the repo:**
-
-- **Org-owned repos** (e.g. `vivarium-collective/<workspace>`): the workflow's `Sync GHCR package visibility` step auto-syncs the package visibility to match the source repo on every push. If your repo is public, `docker pull ghcr.io/<owner>/<repo>:<tag>` works anonymously immediately. Nothing else to do.
-
-- **User-owned repos** (e.g. `<your-username>/<workspace>`): GitHub's REST API does **not** allow the workflow's default `GITHUB_TOKEN` to flip user-owned-package visibility (it requires a PAT with `write:packages` scope). The very first push will publish the package as **private** and emit a `::notice::` in the workflow log explaining this. Two ways to make anonymous pulls work:
-  1. **One-time UI link** (recommended, no PAT needed). On `github.com`, open your profile's **Packages** tab → click the package → **Package settings** → **Manage Actions access** → connect this repository → under **Danger Zone** → **Change package visibility** set to `public`. After that one-time link, every future push inherits visibility from the repo automatically.
-  2. **`GHCR_PAT` secret** (full automation). Create a Personal Access Token (classic) with `write:packages` scope, add it as a repo secret named `GHCR_PAT`. The workflow auto-detects the secret and uses it instead of `GITHUB_TOKEN` for the visibility step.
-
-If you intentionally want the image private even though the repo is public, leave `GHCR_PAT` unset and skip the one-time UI link.
-
-## Two paths to the same workspace
-
-- **Browser dashboard** is the primary UI. Pure-CLI workflows are supported via `python3 scripts/lint-workspace.py` + direct YAML edits, but the buttons handle branch-creation and PR setup for you.
-- **Claude Code + [pbg-superpowers]** adds skills that pair with the dashboard: `/pbg-study` and `/pbg-investigation` (scaffold a study or investigation), `/pbg-viz` (generate a visualization), `/pbg-expert` (wrap a simulator; pass `--lightweight` for in-workspace, or omit for a sibling repo + composite form via `<name> <tools…>`), `/pbg-report` (regenerate per-model reports). The dashboard and the skills share the same `workspace.yaml`.
-
-## Config files to know
-
-- `workspace.yaml` — canonical state (observables, simulations, visualizations, imports, datasets, …)
-- `studies/<slug>/study.yaml` — one research question (8 canonical sections, `phase:` lifecycle)
-- `investigations/<slug>/investigation.yaml` — DAG of studies via `pipeline_gate.prerequisites`
-- `references/{papers.bib, claims.yaml}` — bibliography + claim → paper mapping
-- `.pbg/schemas/{workspace,study,investigation}.schema.json` — JSON schemas (lint enforces them)
-
-## Focused dashboard panels
-
-Open just one panel for a targeted interaction:
-
-| URL | What |
-|---|---|
-| `http://localhost:<port>/?focus=workspace-inputs` | Datasets / references / expert docs |
-| `http://localhost:<port>/?focus=registry` | Module catalog + installed modules |
-| `http://localhost:<port>/?focus=simulation-setup` | Composites browser (legacy route name) |
-| `http://localhost:<port>/?focus=investigations` | Investigation specs + runs |
-| `http://localhost:<port>/?focus=visualizations` | Visualization lifecycle |
-| `http://localhost:<port>/?focus=branches` | GitHub Branches lander |
-| `http://localhost:<port>/?focus=composite-explore&id=<composite>` | A single composite's explorer |
-
-Skills in Claude Code can `open <url>` to surface a focused interaction without dropping users into the full rail.
-
-## Run on sms-api (remote HPC)
-
-Use this path to run a composite on a remote sms-api instance (e.g. AWS
-GovCloud via `vivarium-dashboard`).  Because the container runner installs
-the workspace from git, **all processes must live in the committed
-`pbg_pennylane_adversarial` package and the HEAD must be pushed.**
-
-1. Commit everything and push the branch:
-   ```bash
-   git add -A && git commit -m "chore: ready for remote run"
-   git push origin HEAD
-   ```
-2. Launch from the dashboard CLI:
-   ```bash
-   vivarium-dashboard run-remote <composite-id>
-   ```
-   This will:
-   - Verify the working tree is clean and HEAD is on the remote.
-   - Export the composite to a portable `.pbg` file (full import-path
-     addresses: `local:!pbg_pennylane_adversarial.<Module>.<ClassName>`).
-   - Submit to sms-api with `extra_pip_deps=["git+<origin>@<sha>"]` so
-     the Singularity container installs `pbg_pennylane_adversarial` from the
-     exact committed revision.
-   - Poll until the job completes, then download `results.zip` containing
-     `final_state.json` and any emitter output.
-
-> **Tip:** The dashboard `SmsApiClient` reads the sms-api URL and credentials
-> from the workspace's `workspace.yaml` (or the `SMS_API_URL` env var).
-> Point `vivarium-dashboard serve` at a live sms-api endpoint before running.
-
-## Publishing (read-only, hosted)
-
-This workspace ships with auto-publish CI. On every merge to `main`:
-
-- **`publish-dashboard.yml`** builds the static read-only dashboard SPA and pushes it to the `gh-pages` branch at `dashboard/`.
-- **`publish-reports.yml`** renders each investigation's self-contained HTML report (headless Playwright driving the SPA) and pushes them to `gh-pages` at `investigations/<slug>.html`, plus a landing index.
-
-Both derive the repo name / links from the GitHub repo automatically — nothing to edit. They are deploy jobs, not PR gates: a failure never blocks a merge.
-
-**One-time setup:** after the first publish run creates the `gh-pages` branch, go to **Settings → Pages → Source = "Deploy from a branch" → `gh-pages` / `(root)`**. The dashboard is then served at `https://<user>.github.io/pennylane-adversarial/dashboard/` and reports at `…/pennylane-adversarial/investigations/<slug>.html`.
-
-Preview the published bundle locally (no server, no base-path):
+## Running It End-to-End (Checklist)
 
 ```bash
-scripts/publish_dashboard.sh /tmp/dash && python -m http.server -d /tmp/dash 8080
+# 0. Verify parca cache
+ls ~/vivarium-app/v2ecoli/out/cache/sim_data_cache.dill
+
+# 1. (if needed) Rebuild parca cache
+cd ~/vivarium-app/v2ecoli && uv run v2ecoli-parca --mode fast
+
+# 2. Run v2ecoli workflow
+cd ~/vivarium-app/v2ecoli && uv run v2ecoli-workflow \
+  --config v2ecoli/configs/two_generations.json \
+  --out out/two_gen
+
+# 3. Extract formatted dataset (once from-wcm is built)
+cd ~/vivarium-app/pbg-pennylane-adversarial
+uv run adversarial datasets from-wcm \
+  --history-dir ~/vivarium-app/v2ecoli/out/two_gen/parquet/two_generations/history \
+  --feature-cols listeners__mass__cell_mass,listeners__mass__instantaneous_growth_rate \
+  --target-col listeners__replication_data__number_of_oric \
+  --output wcm_formatted.h5
+
+# 4. Run pipeline with baselines
+uv run adversarial pipeline run wcm_formatted.h5 \
+  --num-qubits 4 --output wcm_results --baselines
 ```
 
-## When stuck
+---
 
-1. `python3 scripts/lint-workspace.py` — most workspace-shape issues surface here.
-2. Look at the **Next step** banner at the top of the dashboard — it points at the right tab.
-3. File an issue at <https://github.com/vivarium-collective/pbg-superpowers/issues>.
+## Current State (as of this writing)
 
-[discovery]: https://github.com/vivarium-collective/pbg-superpowers/blob/main/docs/conventions/discovery.md
-[pbg-superpowers]: https://github.com/vivarium-collective/pbg-superpowers
+- **Fixed**: `num_qubits` auto-raised to match `output_dim` in `processes.py` (+warning)
+- **Existing**: `datasets format` (CSV/TSV/Parquet/JSON/H5/Excel/etc → formatted artifact)
+- **Existing**: `datasets from-wcm` (v2ecoli Parquet history hive dir → formatted artifact; gap 1 done)
+- **Existing**: `pipeline run` (train → PGD → adversarial retrain → evaluate)
+- **Existing**: HTML report with accuracy/loss charts, metrics cards, dataset/config badges,
+  and an optional Baseline Comparison section (gap 2 done — `pipeline run --baselines`)
+- **Existing**: high-`input_dim` features auto-reduced via PCA (fit on train only) to preserve
+  data-reuploading redundancy, with a warning (gap 3 done — see caveat in gap 3's section above)
