@@ -120,6 +120,77 @@ def test_full_pipeline_synthetic(core):
 
 
 @pytest.mark.timeout(300)
+def test_high_input_dim_triggers_pca_reduction(core):
+    """input_dim large relative to circuit capacity warns and PCA-reduces rather
+    than growing the circuit (raising num_layers empirically failed to recover
+    accuracy in exploratory testing; see NEXT_STEPS.md chunk 3)."""
+    from pbg_pennylane_adversarial import PennyLaneAdversarialProcess
+
+    # num_qubits=4, num_layers=4 -> weights_elements=48, MIN_NUM_REUP=2 -> max_dim=24
+    X_train, Y_train, X_test, Y_test = _make_synthetic_data(
+        n_train=14, n_test=6, input_dim=60, n_classes=2
+    )
+
+    config = {
+        "num_qubits": 4,
+        "num_layers": 4,
+        "training_epochs": 1,
+        "adversarial_epochs": 1,
+        "pgd_iter": 2,
+        "batch_size": 14,
+        "seed": 42,
+    }
+
+    proc = PennyLaneAdversarialProcess(config=config, core=core)
+    state = proc.initial_state()
+    state["train_images"] = X_train
+    state["train_labels"] = Y_train
+    state["test_images"] = X_test
+    state["test_labels"] = Y_test
+
+    with pytest.warns(UserWarning, match="PCA"):
+        result = proc.update(state, interval=1.0)
+    state.update(result)
+
+    assert 0.0 <= state["accuracy"] <= 1.0
+
+
+@pytest.mark.timeout(300)
+def test_low_input_dim_no_pca_warning(core):
+    """input_dim comfortably within circuit capacity should not trigger PCA."""
+    import warnings
+    from pbg_pennylane_adversarial import PennyLaneAdversarialProcess
+
+    X_train, Y_train, X_test, Y_test = _make_synthetic_data(
+        n_train=14, n_test=6, input_dim=8, n_classes=2
+    )
+
+    config = {
+        "num_qubits": 4,
+        "num_layers": 4,
+        "training_epochs": 1,
+        "adversarial_epochs": 1,
+        "pgd_iter": 2,
+        "batch_size": 14,
+        "seed": 42,
+    }
+
+    proc = PennyLaneAdversarialProcess(config=config, core=core)
+    state = proc.initial_state()
+    state["train_images"] = X_train
+    state["train_labels"] = Y_train
+    state["test_images"] = X_test
+    state["test_labels"] = Y_test
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = proc.update(state, interval=1.0)
+    assert not any("PCA" in str(w.message) for w in caught)
+    state.update(result)
+    assert 0.0 <= state["accuracy"] <= 1.0
+
+
+@pytest.mark.timeout(300)
 def test_full_pipeline_plusminus(core):
     """Run full pipeline with PlusMinus dataset (backward-compat fallback)."""
     from pbg_pennylane_adversarial import PennyLaneAdversarialProcess

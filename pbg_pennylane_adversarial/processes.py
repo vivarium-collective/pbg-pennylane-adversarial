@@ -5,7 +5,7 @@ from the PennyLane adversarial attacks tutorial. Data arrives through input
 ports so any classification dataset can be used.
 """
 
-import math
+import warnings
 import numpy as np
 import torch
 from process_bigraph import Process
@@ -39,7 +39,11 @@ class PennyLaneAdversarialProcess(Process):
     num_qubits : int
         Number of qubits in circuit (default 8).
     num_layers : int
-        Number of StronglyEntanglingLayers (default 32).
+        Number of StronglyEntanglingLayers (default 32). If input_dim is large enough
+        relative to num_qubits/num_layers that data-reuploading redundancy would drop
+        below MIN_NUM_REUP, features are reduced via PCA (fit on training data, with
+        a warning) rather than growing the circuit -- deeper circuits did not recover
+        accuracy in testing and are more expensive to train.
     input_dim : int or None
         Feature dimension (auto-detected from data if None, default None).
     output_dim : int or None
@@ -92,7 +96,13 @@ class PennyLaneAdversarialProcess(Process):
         Drop in accuracy from benign to adversarial (negative = worse under attack).
     n_queries : integer
         Cumulative number of circuit evaluations.
+    perturbation_delta : array[float64]
+        PGD perturbation applied to the test set, shape (n_test, input_dim).
+        Populated once the ``benign_eval`` phase completes; reusable to run a
+        transfer attack against other (e.g. classical) models on the same data.
     """
+
+    MIN_NUM_REUP = 2  # minimum data-reuploading redundancy; see _build_model
 
     config_schema = {
         "num_qubits": {"_type": "integer", "_default": 8, "_minimum": 1},
@@ -130,6 +140,7 @@ class PennyLaneAdversarialProcess(Process):
             "robust_accuracy": "float",
             "adversarial_accuracy_drop": "float",
             "n_queries": "integer",
+            "perturbation_delta": {"_type": "array", "_data": "float64"},
         }
 
     def initial_state(self):
@@ -143,6 +154,7 @@ class PennyLaneAdversarialProcess(Process):
             "robust_accuracy": 0.0,
             "adversarial_accuracy_drop": 0.0,
             "n_queries": 0,
+            "perturbation_delta": [],
         }
 
     def __init__(self, config=None, core=None):
@@ -230,10 +242,43 @@ class PennyLaneAdversarialProcess(Process):
         num_layers = c["num_layers"]
         output_dim = self._output_dim
 
+        if output_dim > num_qubits:
+            warnings.warn(
+                f"output_dim ({output_dim}) > num_qubits ({num_qubits}); "
+                f"raising num_qubits to {output_dim} to avoid wire error. "
+                f"Consider setting --num-qubits >= output_dim."
+            )
+            num_qubits = output_dim
+
         weights_shape = qml.StronglyEntanglingLayers.shape(
             n_layers=num_layers, n_wires=num_qubits
         )
         weights_elements = weights_shape[0] * weights_shape[1] * weights_shape[2]
+
+        # Data-reuploading redundancy (num_reup) collapsing to 1 empirically wrecks
+        # trainability once input_dim approaches circuit capacity (weights_elements).
+        # Raising num_layers to compensate does NOT fix this in practice (measured:
+        # accuracy stays at chance even at 50 training epochs) -- a deeper circuit is
+        # simply harder to train. Reducing input_dim via PCA while keeping num_qubits/
+        # num_layers fixed is the fix that actually restores accuracy in practice.
+        max_dim = max(1, weights_elements // self.MIN_NUM_REUP)
+        if self._input_dim > max_dim:
+            from sklearn.decomposition import PCA
+
+            warnings.warn(
+                f"input_dim ({self._input_dim}) exceeds circuit capacity for "
+                f"num_qubits={num_qubits}, num_layers={num_layers} (would give "
+                f"data-reuploading redundancy < {self.MIN_NUM_REUP}x); reducing to "
+                f"{max_dim} dimensions via PCA fit on the training data. Consider "
+                f"--num-layers if you'd rather keep all raw features."
+            )
+            n_components = min(max_dim, self._X_train.shape[0])
+            pca = PCA(n_components=n_components, random_state=c["seed"])
+            X_train_np = pca.fit_transform(self._X_train.numpy())
+            X_test_np = pca.transform(self._X_test.numpy())
+            self._X_train = torch.tensor(X_train_np).float()
+            self._X_test = torch.tensor(X_test_np).float()
+            self._input_dim = n_components
 
         input_dim = self._input_dim
         num_reup = max(1, weights_elements // input_dim)
@@ -409,6 +454,7 @@ class PennyLaneAdversarialProcess(Process):
                 "robust_accuracy": 0.0,
                 "adversarial_accuracy_drop": drop,
                 "n_queries": self._n_queries,
+                "perturbation_delta": perturbations.detach().cpu().numpy().tolist(),
             }
 
         elif phase == "attack":
