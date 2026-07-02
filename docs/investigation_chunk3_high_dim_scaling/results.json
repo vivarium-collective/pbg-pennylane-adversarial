@@ -1,0 +1,364 @@
+{
+  "position_sensitivity": [
+    {
+      "position": "first",
+      "seed": 1,
+      "accuracy": 0.7666666666666667
+    },
+    {
+      "position": "first",
+      "seed": 2,
+      "accuracy": 1.0
+    },
+    {
+      "position": "first",
+      "seed": 3,
+      "accuracy": 1.0
+    },
+    {
+      "position": "first",
+      "seed": 4,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "position": "first",
+      "seed": 5,
+      "accuracy": 0.8666666666666667
+    },
+    {
+      "position": "last",
+      "seed": 1,
+      "accuracy": 0.8666666666666667
+    },
+    {
+      "position": "last",
+      "seed": 2,
+      "accuracy": 0.8
+    },
+    {
+      "position": "last",
+      "seed": 3,
+      "accuracy": 0.9333333333333333
+    },
+    {
+      "position": "last",
+      "seed": 4,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "position": "last",
+      "seed": 5,
+      "accuracy": 0.6
+    }
+  ],
+  "redundancy_sweep": [
+    {
+      "input_dim": 8,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.9666666666666667
+    },
+    {
+      "input_dim": 8,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.9666666666666667
+    },
+    {
+      "input_dim": 8,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 8,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.9666666666666667
+    },
+    {
+      "input_dim": 8,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.9666666666666667
+    },
+    {
+      "input_dim": 8,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 16,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.7666666666666667
+    },
+    {
+      "input_dim": 16,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 16,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 16,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.7666666666666667
+    },
+    {
+      "input_dim": 16,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 16,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 1.0
+    },
+    {
+      "input_dim": 24,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.3
+    },
+    {
+      "input_dim": 24,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.8
+    },
+    {
+      "input_dim": 24,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 0.6333333333333333
+    },
+    {
+      "input_dim": 24,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.3
+    },
+    {
+      "input_dim": 24,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.8
+    },
+    {
+      "input_dim": 24,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 0.6333333333333333
+    },
+    {
+      "input_dim": 32,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.8
+    },
+    {
+      "input_dim": 32,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "input_dim": 32,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 32,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 32,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.9333333333333333
+    },
+    {
+      "input_dim": 32,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 0.5333333333333333
+    },
+    {
+      "input_dim": 48,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 48,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 48,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 0.43333333333333335
+    },
+    {
+      "input_dim": 48,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.5
+    },
+    {
+      "input_dim": 48,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.5
+    },
+    {
+      "input_dim": 48,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 0.43333333333333335
+    },
+    {
+      "input_dim": 64,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "input_dim": 64,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 64,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 0.43333333333333335
+    },
+    {
+      "input_dim": 64,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.6666666666666666
+    },
+    {
+      "input_dim": 64,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.4666666666666667
+    },
+    {
+      "input_dim": 64,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "input_dim": 100,
+      "variant": "original_no_fix",
+      "seed": 1,
+      "accuracy": 0.43333333333333335
+    },
+    {
+      "input_dim": 100,
+      "variant": "original_no_fix",
+      "seed": 2,
+      "accuracy": 0.43333333333333335
+    },
+    {
+      "input_dim": 100,
+      "variant": "original_no_fix",
+      "seed": 3,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "input_dim": 100,
+      "variant": "current_pca_fix",
+      "seed": 1,
+      "accuracy": 0.5333333333333333
+    },
+    {
+      "input_dim": 100,
+      "variant": "current_pca_fix",
+      "seed": 2,
+      "accuracy": 0.5
+    },
+    {
+      "input_dim": 100,
+      "variant": "current_pca_fix",
+      "seed": 3,
+      "accuracy": 0.6666666666666666
+    }
+  ],
+  "redundancy_sweep_meta": {
+    "weights_elements": 48,
+    "current_min_num_reup": 2,
+    "current_pca_trigger_dim": 24,
+    "original_truncation_trigger_dim": 48
+  },
+  "layers_epoch_scaling": [
+    {
+      "epochs": 8,
+      "seed": 1,
+      "accuracy": 0.5
+    },
+    {
+      "epochs": 8,
+      "seed": 2,
+      "accuracy": 0.6
+    },
+    {
+      "epochs": 8,
+      "seed": 3,
+      "accuracy": 0.5
+    },
+    {
+      "epochs": 25,
+      "seed": 1,
+      "accuracy": 0.36666666666666664
+    },
+    {
+      "epochs": 25,
+      "seed": 2,
+      "accuracy": 0.5666666666666667
+    },
+    {
+      "epochs": 25,
+      "seed": 3,
+      "accuracy": 0.6
+    },
+    {
+      "epochs": 50,
+      "seed": 1,
+      "accuracy": 0.4
+    },
+    {
+      "epochs": 50,
+      "seed": 2,
+      "accuracy": 0.5
+    },
+    {
+      "epochs": 50,
+      "seed": 3,
+      "accuracy": 0.5
+    }
+  ],
+  "meta": {
+    "wall_time_s": 277.51322197914124
+  }
+}
