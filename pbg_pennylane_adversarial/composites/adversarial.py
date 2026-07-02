@@ -84,6 +84,7 @@ def _build_adversarial_document(
                 "robust_accuracy": ["stores", "robust_accuracy"],
                 "adversarial_accuracy_drop": ["stores", "adversarial_accuracy_drop"],
                 "n_queries": ["stores", "n_queries"],
+                "perturbation_delta": ["stores", "perturbation_delta"],
             },
         },
         "stores": {
@@ -100,6 +101,7 @@ def _build_adversarial_document(
             "robust_accuracy": 0.0,
             "adversarial_accuracy_drop": 0.0,
             "n_queries": 0,
+            "perturbation_delta": [],
         },
         "emitter": {
             "_type": "step",
@@ -234,3 +236,67 @@ def adversarial_lightweight(core=None, *, num_qubits=4, num_layers=8, n_train=50
         "training_epochs": 2,
         "adversarial_epochs": 1,
     })
+
+
+@composite_generator(
+    name="pennylane_adversarial_adversarial_from_formatted",
+    description=(
+        "Full adversarial pipeline using a pre-formatted dataset artifact "
+        "produced by ``adversarial datasets format``.  Loads the artifact "
+        "at generation time and wires the data directly into the composite "
+        "stores so that``PennyLaneAdversarialProcess`` reads it from its "
+        "input ports."
+    ),
+    parameters={
+        "dataset_path": {
+            "type": "string",
+            "required": True,
+            "description": "Path to formatted artifact (.h5, .json, or "
+                           "Parquet directory).",
+        },
+        "training_epochs": {
+            "type": "integer",
+            "default": 4,
+            "description": "Number of initial training epochs",
+        },
+        "epsilon": {
+            "type": "float",
+            "default": 0.1,
+            "description": "PGD perturbation bound L_inf",
+        },
+        "num_qubits": {
+            "type": "integer",
+            "default": 8,
+            "description": "Number of qubits in the circuit",
+        },
+        "adversarial_epochs": {
+            "type": "integer",
+            "default": 2,
+            "description": "Number of adversarial retraining epochs",
+        },
+    },
+)
+def adversarial_from_formatted(
+    core=None, *,
+    dataset_path: str = ...,
+    training_epochs: int = 4,
+    epsilon: float = 0.1,
+    num_qubits: int = 8,
+    adversarial_epochs: int = 2,
+):
+    from pbg_pennylane_adversarial.dataset_transform.loader import load_formatted
+
+    data = load_formatted(dataset_path)
+
+    return _build_adversarial_document(
+        config={
+            "training_epochs": training_epochs,
+            "epsilon": epsilon,
+            "num_qubits": num_qubits,
+            "adversarial_epochs": adversarial_epochs,
+        },
+        train_images=data["train_images"],
+        train_labels=data["train_labels"],
+        test_images=data["test_images"],
+        test_labels=data["test_labels"],
+    )
