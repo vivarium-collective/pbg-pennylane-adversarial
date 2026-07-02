@@ -320,3 +320,61 @@ The wrapper bridges PennyLane's `StronglyEntanglingLayers` circuit template and 
 - Requires `lightning.qubit` device (PennyLane-Lightning plugin) for fast simulation.
 - Circuit evaluation is the throughput bottleneck — per-sample forward pass is the dominant cost.
 - The PGD attack assumes continuous-valued features.
+
+## Applications
+
+### Cell-cycle phase classification from whole-cell model trajectories
+
+The dataset `baseline_classification_v1.csv` is a sampled subset of **real raw
+timeseries output** from a vEcoli single-cell simulation (`sms_single`,
+2529 timesteps, 42 min cell cycle, 7 Parquet batch files under
+`vecoli_data/outputs/sms_single/`). Each row is a 1-second timestep from the
+simulated cell's trajectory.
+
+The target column `cell_cycle_phase` classifies each timestep into one of three
+stages based on the chromosome replication state directly observed in the WCM:
+
+| Phase | Heuristic | WCM signature |
+|---|---|---|
+| `initiation_phase` (0) | Pre-chromosome completion | `number_of_oric = 2`, `full_chromosome = 1` |
+| `chromosome_complete` (1) | Replication finished, pre-oriC duplication | `number_of_oric = 2`, `full_chromosome = 2` |
+| `post_oric_duplication` (2) | Origins duplicated, late cell cycle | `number_of_oric = 4` |
+
+This is biologically novel — most cell-cycle classifiers use just mass or oriC
+count; here the **two-step replication signature** (chromosome completion at
+*t* ≈ 1329 s, oriC duplication at *t* ≈ 1625 s) provides a richer target that
+tests whether a quantum classifier can resolve distinct sub-phases of
+chromosome replication from molecular profiles alone.
+
+**The adversarial question:** *can a quantum classifier robustly distinguish
+these three cell-cycle stages from molecular profiles alone, even under feature
+perturbation?*
+
+### Stress-response classification from whole-cell model trajectories
+
+The dataset `baseline_classification.csv` classifies simulation timepoints into
+three resource-allocation regimes using scalar features from a whole-cell
+E. coli model (v2ecoli):
+
+| Regime | Heuristic |
+|---|---|
+| `balanced_growth` (0) | ppGpp < 10 µM, charged tRNA > 0.75 |
+| `stringent_response` (1) | ppGpp ≥ 10 µM or charged tRNA < 0.75 |
+| `division_competent` (2) | `dry_mass > 600` fg, `number_of_oric ≥ 4`, healthy growth |
+
+These two example datasets illustrate the range of biologically meaningful
+classification tasks the pipeline supports — from cell-cycle staging to
+physiological stress detection. Both artifacts were produced by the
+`adversarial datasets format` CLI command and are fully compatible with
+`PennyLaneAdversarialProcess` via `load_formatted` → `_build_adversarial_document`.
+
+
+## Honest Assesment
+
+The quantum classifier itself is unlikely to outperform classical models on WCM data. With 4 qubits, 8 layers, and ~40 trainable parameters, it has less capacity than a simple 2-layer neural net. The ~47% accuracy on 3-class v1 data (vs 33% random) confirms it learns something, but a random forest or logistic regression on the same 17 features would likely score higher with less tuning.
+However, the adversarial robustness framework is genuinely novel and useful for biological modeling in three ways:
+1. Measurement noise as a first-class concern (epsilon=0.05): Wet-lab measurements of ppGpp, growth rate, mass fractions, and RNA counts all carry ±5% experimental error. The PGD attack finds the worst-case misclassification within that noise bound. A model that maintains accuracy under PGD is one whose predictions are stable under realistic measurement uncertainty — a property no standard classifier (quantum or classical) guarantees.
+2. Noise-tolerance, not evasion: In security, adversarial robustness prevents an attacker from evading a classifier. In biology, it means "if I re-measure this cell, will I get the same phenotype call?" This is a quality metric for the biomarker signature itself — features that survive epsilon=0.05 perturbation without changing the predicted class are diagnostically robust.
+3. The "adversarial accuracy drop" as a biological signal: A large drop between benign and adversarial accuracy means the decision boundary has a fragile orientation relative to the noise directions. In biological terms, some phenotypes might be separated by thin, noisy feature margins (e.g., a single RNA species) while others are separated by broad, stable margins (e.g., mass ratios). The framework quantifies this per-dataset.
+What would make this compelling
+The biggest gap is No classical baseline in the pipeline. To make a convincing case, the pipeline (or at minimum the report) should run sklearn.linear_model.LogisticRegression and sklearn.ensemble.RandomForestClassifier on the same train/test split and report their benign/adversarial accuracy alongside the quantum model's. If the quantum model matches or approaches classical accuracy, the robustness framing is a bonus. If it's far behind, the novelty claim rests entirely on "quantum classifier with noise-robustness guarantee" which is a very niche sell for WCM biologists.
