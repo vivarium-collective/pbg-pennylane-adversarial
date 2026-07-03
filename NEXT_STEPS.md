@@ -100,6 +100,63 @@ scope addition beyond the original plan text, agreed with the user in-session.
 
 ---
 
+## 4. A1 Baseline Decision Gate — persistence, DMD, SINDy on real WCM transition data (`I=3, E=1, S=2 → 6`)
+
+**Gap**: `todo.md`'s A1 plan (QGRNN-style graph-structured surrogate) has its own phase-4 decision
+gate — "if MLP/GNN/QGRNN don't clearly beat persistence and DMD, stop, the ablation is measuring
+nothing" — but that gate has never been run against real data. Phases 0–2 (literature check, data
+spike, circuit spike) and phase 3 (`QGRNNSurrogate`/`ClassicalGNNSurrogate` model classes) are
+already done and committed, but no model has been trained on real transition data yet, and no
+baseline has been computed against it either.
+
+**Source**: `todo.md` §2 (A1), phases 1–4;
+`pbg_pennylane_adversarial/dataset_transform/wcm_loader.py` (`load_wcm_history`,
+`build_transition_pairs`, already built + tested);
+`pbg_pennylane_adversarial/qgrnn_surrogate.py` (`QGRNNSurrogate`, `ClassicalGNNSurrogate`,
+already built + tested, not yet trained on real data). Confirmed prior-session decisions: a
+60-second prediction stride (native 1-second resolution is dominated by trivial persistence);
+N=4 real trajectories (4 lineage seeds × 3 generations pulled from `comparison_10s_16g_v2_aws`,
+not the 12 `todo.md` originally assumed).
+
+**Plan**:
+1. Build the real transition dataset: `load_wcm_history()` on the 8 pulled parquet shards →
+   `build_transition_pairs()` at the confirmed 60-second stride, restricted to the 8 real
+   mass+chromosome columns (`cell_mass`, `dry_mass`, `protein_mass`, `rna_mass`, `dna_mass`,
+   `volume`, `instantaneous_growth_rate`, `number_of_oric`), N=4 trajectories with one held out
+   for test (mirroring `evaluate_surrogate.py`'s held-out-trajectory protocol).
+2. Naive persistence baseline (`Ŷ = X`, no training).
+3. Hand-rolled linear DMD baseline (rank-truncated SVD operator fit, per the numerical-stability
+   fix already found during the phase-1 data spike — do not add `pydmd` as a dependency, per the
+   earlier design-flaw finding: its API expects one sequential snapshot matrix, not pre-paired
+   multi-trajectory `(X, Y)` pairs).
+4. **New arm, not in `todo.md`'s original plan**: a SINDy-style sparse-regression baseline
+   (Brunton, Proctor & Kutz 2016) — fit a sparse linear combination over a small library of
+   candidate nonlinear terms per node. Needs less data than DMD+GNN and competes directly with
+   A1's own "discovered sparse structure" claim more sharply than the classical-GNN arm does; if
+   SINDy alone recovers the known couplings from 3 training trajectories, that's a sharper
+   negative result for A1 than anything currently in the ablation.
+5. Report per-node R²/RMSE for all three arms on the held-out trajectory; DMD's eigenvalue
+   spectrum (slow/persistent-mode check, also a quantitative version of the growth-rate-variance
+   check from anticipated criticism #2); SINDy's recovered sparse terms per node.
+6. **Decision gate**: only proceed to training `QGRNNSurrogate`/`ClassicalGNNSurrogate` (both
+   already built in `pbg_pennylane_adversarial/qgrnn_surrogate.py`, not yet trained on real data)
+   once this step shows real, non-trivial dynamics left to model — i.e., don't spend the
+   multi-session QGRNN/GNN training effort if persistence/DMD/SINDy already explain most of the
+   achievable variance at N=4. If they do, report that plainly as its own finding rather than
+   downplaying it to protect the neural/quantum narrative.
+
+**Explicitly out of scope for this gap** (separate, not-yet-resolved items, tracked in project
+memory rather than here): the `todo.md` "scrambled-graph control" is vacuous as currently written
+(the graph starts fully-connected, so there's no alternate same-density topology to scramble
+into) — a permutation-test-based fix has been proposed but not implemented, and only matters once
+a trained coupling matrix exists to test, i.e. after this gap's decision gate passes. The
+interventional/causal validation step (rerunning the `v2ecoli` composite with a perturbed
+parameter) is also unaffected by this gap either way.
+
+**Status: not started, queued next, awaiting go-ahead.**
+
+---
+
 ## Running It End-to-End (Checklist)
 
 ```bash
