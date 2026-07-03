@@ -153,7 +153,37 @@ a trained coupling matrix exists to test, i.e. after this gap's decision gate pa
 interventional/causal validation step (rerunning the `v2ecoli` composite with a perturbed
 parameter) is also unaffected by this gap either way.
 
-**Status: not started, queued next, awaiting go-ahead.**
+**Status: done.** `pbg_pennylane_adversarial/dynamics_baselines.py` (`persistence_predict`,
+`fit_dmd` — hand-rolled rank-truncated/ridge-capable SVD pseudoinverse, no `pydmd` dependency —
+`fit_sindy` — STLSQ over a small polynomial library, `per_node_metrics`), a `stride` parameter
+added to `wcm_loader.build_transition_pairs()`, and `dataset_transform/synthetic_dynamics.py`
+(`SyntheticTransitionGenerator`, the ported `NonlinearProcessGenerator` idea from
+`pbg-pennylane-data-reuploading` — see `comparison.html` §6 — adapted to regression with a
+*measured*, not asserted, achievable-R2 ceiling, fixing that generator's own audited flaw).
+The real gate itself lives in `docs/investigation_a1_qgrnn_surrogate/run_baseline_gate.py` +
+`build_report.py` (investigation-specific, not pytest — mirrors chunk3's convention), run
+against the real N=4-trajectory, 60s-stride, 8-column transition dataset built from the locally
+pulled `comparison_10s_16g_v2_aws` sample.
+
+**Result, and why it's more nuanced than a single verdict**: a synthetic data-sufficiency
+calibration (same harness, a *correctly-specified linear* system) found that at the real N=4,
+DMD's leave-one-trajectory-out (LOTO) median R2 is *worse than predicting the mean*
+(unconstrained 8x8 operator, too few independent trajectories to pin it down) even when the
+ground truth is exactly linear — SINDy's sparsity partially compensates but still undersells
+the measured achievable ceiling. This means real-data DMD/SINDy scores can't be read at face
+value at N=4. Splitting the 8 real nodes per `todo.md` phase 5's pre-registered sanity-check/
+real-test classification: the 7 near-deterministic mass/replication nodes are recovered at
+R2~0.85-0.98 by DMD/SINDy (expected, not a finding); `instantaneous_growth_rate` (the one
+genuinely emergent relationship) comes back R2<0 for every arm in every fold — worse than its
+own mean, on the one node that actually matters. Given the calibration finding, this can't be
+distinguished from "not enough data to see it," so the gate's verdict is **INCONCLUSIVE for
+`instantaneous_growth_rate`** (not a flat STOP) — recommended next step is pulling more real
+trajectories (calibration suggests N~8-12 would meaningfully sharpen this) and/or richer
+flux-level features, before training `QGRNNSurrogate`/`ClassicalGNNSurrogate` or concluding
+growth_rate has no learnable one-step dynamics. One held-out trajectory (lineage_seed=5,
+generation=16 — the longest/latest pulled) causes catastrophic failure even on the
+near-deterministic sanity-check cluster and is flagged for follow-up, separate from the main
+verdict. Full numbers, charts, and reasoning: `docs/investigation_a1_qgrnn_surrogate/report.html`.
 
 ---
 
@@ -196,3 +226,7 @@ uv run adversarial pipeline run wcm_formatted.h5 \
   and an optional Baseline Comparison section (gap 2 done — `pipeline run --baselines`)
 - **Existing**: high-`input_dim` features auto-reduced via PCA (fit on train only) to preserve
   data-reuploading redundancy, with a warning (gap 3 done — see caveat in gap 3's section above)
+- **Existing**: `dynamics_baselines.py` (persistence/DMD/SINDy) and `synthetic_dynamics.py`
+  (controlled transition-pair generator with a measured achievable-R2 ceiling) for A1's classical
+  decision gate (gap 4 done — see caveat/result in gap 4's section above; full report at
+  `docs/investigation_a1_qgrnn_surrogate/report.html`)

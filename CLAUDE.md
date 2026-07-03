@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Next session priority
+
+`comparison.html`'s Recommendation section (2026-07-02 evaluation) is done: A1's phase-4 classical
+decision gate ran on real data (`NEXT_STEPS.md` gap 4 — verdict INCONCLUSIVE for the one real-test
+node, `instantaneous_growth_rate`; see `docs/investigation_a1_qgrnn_surrogate/report.html`), and the
+`NonlinearProcessGenerator` idea was ported into `dataset_transform/synthetic_dynamics.py` (with its
+audited "asserted, not validated" flaw fixed — the achievable-R2 ceiling is measured, not asserted).
+`pbg-pennylane-data-reuploading` was not touched, per the recommendation's third item.
+
+Next decision point: per gap 4's result, either (a) pull more real trajectories from S3 (calibration
+suggests N~8-12 would meaningfully sharpen the growth-rate result) before training
+`QGRNNSurrogate`/`ClassicalGNNSurrogate`, or (b) proceed to phase 3's training run anyway, explicitly
+scoped as a pilot/methodology demonstration given the INCONCLUSIVE gate rather than a validated go.
+Needs an explicit user decision before either path is started.
+
 ## What this repo is
 
 A [process-bigraph](https://github.com/vivarium-collective/process-bigraph) wrapper around the PennyLane
