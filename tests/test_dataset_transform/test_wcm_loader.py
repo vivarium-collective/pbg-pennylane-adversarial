@@ -177,3 +177,40 @@ class TestBuildTransitionPairs:
     def test_missing_column_raises(self):
         with pytest.raises(KeyError):
             build_transition_pairs(self._df(), feature_cols=["not_a_column"])
+
+    def test_stride_one_matches_default_behavior(self):
+        default = build_transition_pairs(self._df(), feature_cols=["a", "b"])
+        strided = build_transition_pairs(self._df(), feature_cols=["a", "b"], stride=1)
+        for a, b in zip(default, strided):
+            assert np.allclose(a, b) if a.dtype.kind == "f" else np.array_equal(a, b)
+
+    def test_stride_subsamples_before_pairing(self):
+        # 5-row trajectory (t=0..4, values 0,10,...,40), stride=2 -> keep rows
+        # at t=0,2,4 -> pairs (0->2), (2->4), each DT=2.0 instead of 1.0.
+        df = pl.DataFrame({
+            "lineage_seed": [0] * 5,
+            "generation": [0] * 5,
+            "agent_id": [0] * 5,
+            "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+            "a": [0.0, 10.0, 20.0, 30.0, 40.0],
+        })
+        X, Y, DT, traj_id = build_transition_pairs(df, feature_cols=["a"], stride=2)
+        assert X.shape == (2, 1)
+        assert np.allclose(X[:, 0], [0.0, 20.0])
+        assert np.allclose(Y[:, 0], [20.0, 40.0])
+        assert np.allclose(DT, [2.0, 2.0])
+
+    def test_stride_too_short_group_produces_no_pairs(self):
+        df = pl.DataFrame({
+            "lineage_seed": [0, 0],
+            "generation": [0, 0],
+            "agent_id": [0, 0],
+            "time": [0.0, 1.0],
+            "a": [1.0, 2.0],
+        })
+        X, Y, DT, traj_id = build_transition_pairs(df, feature_cols=["a"], stride=5)
+        assert X.shape == (0, 1)
+
+    def test_invalid_stride_raises(self):
+        with pytest.raises(ValueError):
+            build_transition_pairs(self._df(), feature_cols=["a"], stride=0)

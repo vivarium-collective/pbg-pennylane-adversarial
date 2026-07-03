@@ -52,6 +52,7 @@ def build_transition_pairs(
     feature_cols: list[str],
     group_keys: tuple[str, ...] = ("lineage_seed", "generation", "agent_id"),
     sort_col: str = "time",
+    stride: int = 1,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Build (X_t, Y_{t+1}) transition pairs from a flattened WCM history DataFrame.
 
@@ -71,7 +72,16 @@ def build_transition_pairs(
     Callers should inspect/filter on `DT` (e.g. drop pairs whose DT deviates from
     the expected raster interval) rather than assume every returned pair is a
     normal single-step transition.
+
+    `stride` subsamples each group (every `stride`-th row, by `sort_col` order)
+    before pairing consecutive (now-subsampled) rows -- e.g. `stride=60` on
+    native 1-second-resolution real WCM data produces ~60-second-interval
+    transition pairs instead of trivial 1-second ones (confirmed prior finding:
+    native resolution is dominated by trivial persistence). Default `stride=1`
+    reproduces the original single-step-pairing behavior exactly.
     """
+    if stride < 1:
+        raise ValueError(f"stride must be >= 1, got {stride}")
     missing = [c for c in (*group_keys, sort_col, *feature_cols) if c not in df.columns]
     if missing:
         raise KeyError(f"columns not found in df: {missing}")
@@ -80,6 +90,8 @@ def build_transition_pairs(
 
     xs, ys, dts, tids = [], [], [], []
     for traj_id, (_, group) in enumerate(ordered.group_by(group_keys, maintain_order=True)):
+        if stride > 1:
+            group = group[::stride]
         if len(group) < 2:
             continue
         feats = group.select(feature_cols).to_numpy()
