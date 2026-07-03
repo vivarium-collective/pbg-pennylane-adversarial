@@ -378,3 +378,38 @@ However, the adversarial robustness framework is genuinely novel and useful for 
 3. The "adversarial accuracy drop" as a biological signal: A large drop between benign and adversarial accuracy means the decision boundary has a fragile orientation relative to the noise directions. In biological terms, some phenotypes might be separated by thin, noisy feature margins (e.g., a single RNA species) while others are separated by broad, stable margins (e.g., mass ratios). The framework quantifies this per-dataset.
 What would make this compelling
 The biggest gap is No classical baseline in the pipeline. To make a convincing case, the pipeline (or at minimum the report) should run sklearn.linear_model.LogisticRegression and sklearn.ensemble.RandomForestClassifier on the same train/test split and report their benign/adversarial accuracy alongside the quantum model's. If the quantum model matches or approaches classical accuracy, the robustness framing is a bonus. If it's far behind, the novelty claim rests entirely on "quantum classifier with noise-robustness guarantee" which is a very niche sell for WCM biologists.
+
+## Theoretical References
+
+Academic and publication references consulted in building this package and in scoping its follow-on work (`USE_CASES.md`, `todo.md`). Grouped by what they ground.
+
+### Core pipeline (adversarial attacks on QML)
+
+- Wendlinger, M., Tscharke, K., & Debus, C. (2024). *A Comparative Analysis of Adversarial Robustness for Quantum and Classical Machine Learning Models.* [arXiv:2404.16154](https://arxiv.org/abs/2404.16154) — primary theoretical basis for the [PennyLane adversarial attacks tutorial](https://pennylane.ai/demos/tutorial_adversarial_attacks_QML) this repo wraps.
+- Goodfellow, I. J., Shlens, J., & Szegedy, C. (2014). *Explaining and Harnessing Adversarial Examples.* [arXiv:1412.6572](https://arxiv.org/abs/1412.6572) — foundational adversarial-examples paper cited by the tutorial.
+- Liu, Y., Arunachalam, S., & Temme, K. (2020). *A Rigorous and Robust Quantum Speed-up in Supervised Machine Learning.* [arXiv:2010.02174](https://arxiv.org/abs/2010.02174)
+- Lu, S., Duan, L.-M., & Deng, D.-L. (2019). *Quantum Adversarial Machine Learning.* [arXiv:2001.00030](https://arxiv.org/abs/2001.00030)
+
+### B1 (quantum-kernel pre-screening) planning references
+
+- Huang, H.-Y., Broughton, M., Mohseni, M., Babbush, R., Boixo, S., Neven, H., & McClean, J. R. (2021). *Power of data in quantum machine learning.* Nature Communications 12, 2631. [arXiv:2011.01938](https://arxiv.org/abs/2011.01938) — source of the geometric-difference metric, per PennyLane's [pre-screening demo](https://pennylane.ai/qml/demos/tutorial_huang_geometric_kernel_difference).
+
+### A1 (QGRNN-style graph-structured surrogate) planning references
+
+- Verdon, G., McCourt, T., Luzhnica, E., Singh, V., Leichenauer, S., & Hidary, J. (2019). *Quantum Graph Neural Networks.* [arXiv:1909.12264](https://arxiv.org/abs/1909.12264) — introduces QGNN/QGRNN, basis of PennyLane's [`tutorial_qgrnn`](https://pennylane.ai/qml/demos/tutorial_qgrnn).
+- Scott, M., Gunderson, C. W., Mateescu, E. M., Zhang, Z., & Hwa, T. (2010). *Interdependence of Cell Growth and Gene Expression: Origins and Consequences.* Science 330(6007), 1099–1102. — bacterial growth-law relationship (ribosomal/RNA mass fraction scales with growth rate) used as A1's "real test" validation target.
+- Cooper, S., & Helmstetter, C. E. (1968). *Chromosome replication and the division cycle of Escherichia coli B/r.* J. Mol. Biol. 31(3), 519–540. — replication-timing model underlying the `dna_mass`↔`number_of_oric` coupling check.
+- Schmid, P. J. (2010). *Dynamic mode decomposition of numerical and experimental data.* Journal of Fluid Mechanics 656, 5–28. — basis for A1's linear DMD baseline arm.
+
+### B4 (barren-plateau diagnostics) planning references
+
+- McClean, J. R., Boixo, S., Smelyanskiy, V. N., Babbush, R., & Neven, H. (2018). *Barren plateaus in quantum neural network training landscapes.* Nature Communications 9, 4812. — basis for PennyLane's [`tutorial_barren_plateaus`](https://pennylane.ai/qml/demos/tutorial_barren_plateaus).
+- Cerezo, M., Sone, A., Volkoff, T., Cincio, L., & Coles, P. J. (2021). *Cost function dependent barren plateaus in shallow parametrized quantum circuits.* Nature Communications 12, 1791. — basis for the stretch-goal local-cost-function mitigation (`tutorial_local_cost_functions`).
+
+### A1 novelty/prior-art literature check (conducted 2026-07-02, phase 0 of implementation)
+
+Searched to determine whether QGRNN-style circuits have already been applied to real biological time-series/dynamics data, before committing engineering time to A1's novelty claim. Closest prior art found:
+
+- **Sohail, M. A., Sudharshan, R. R., Pradhan, S. S., & Rao, A. (2026).** *Quantum Hamiltonian Learning using Time-Resolved Measurement Data and its Application to Gene Regulatory Network Inference.* [arXiv:2602.19496](https://arxiv.org/abs/2602.19496), also on [bioRxiv](https://www.biorxiv.org/content/10.64898/2026.03.05.709897v1). **This is a materially close prior-art hit**: a parameterized-Hamiltonian model (QHGM) encoding gene interactions, trained via a variational learning algorithm with finite-sample recovery guarantees, applied to real Glioblastoma single-cell RNA-seq pseudotime data — recovering biologically plausible regulatory connections. It predates this session by several months. It targets gene regulatory networks from scRNA-seq pseudotime, not a mechanistic whole-cell-model's multi-observable transition dynamics, and (from the abstract alone) it isn't confirmed whether QHGM is executed as an actual Trotterized circuit (QGRNN-style) versus a classical estimator built on quantum-Hamiltonian-learning theory — the full text needs a closer read before finalizing A1's novelty claim in any write-up. At minimum, this must be cited as related work; the "first application to real biological time-series data" framing in `todo.md` needs revising to a narrower, still-checkable claim (e.g., first application to a *mechanistic whole-cell simulator's* multi-observable dynamics, as opposed to transcriptomic pseudotime).
+- Additional related work surfaced, less directly overlapping: Zhang et al., *Quantum gene regulatory networks*, [arXiv:2206.15362](https://arxiv.org/abs/2206.15362); *QGHNN: A quantum graph Hamiltonian neural network*, [arXiv:2501.07986](https://arxiv.org/abs/2501.07986); *Bayesian Networks based Hybrid Quantum-Classical Machine Learning Approach to Elucidate Gene Regulatory Pathways*, [arXiv:1901.10557](https://arxiv.org/abs/1901.10557); *Quantum Deep Learning Pipeline for Next Generation Network Biology*, [bioRxiv 2025.10.28.685074](https://www.biorxiv.org/content/10.1101/2025.10.28.685074); *Feature Prediction in Quantum Graph Recurrent Neural Networks with Applications in Information Hiding*, [arXiv:2506.23144](https://arxiv.org/abs/2506.23144) (non-biological application of QGRNN); *From Graphs to Qubits: A Critical Review of Quantum Graph Neural Networks*, [arXiv:2408.06524](https://arxiv.org/abs/2408.06524) (survey).
+- None of the above apply a QGRNN-style circuit to a mechanistic whole-cell-model simulator's transition dynamics specifically — the narrower claim in `todo.md`'s "Novelty — deep dive" section still appears to hold, but should be stated relative to the QHGM paper above, not as if no related work exists.
