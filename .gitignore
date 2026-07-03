@@ -23,3 +23,7 @@ investigations/*/.run.lock
 workspace/reports/assets/*
 !workspace/reports/assets/.keep
 .superpowers/brainstorm/
+todo.md
+.ipynb_checkpoints/
+wcm_replication_*
+test.ipynb
